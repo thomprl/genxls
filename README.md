@@ -1,4 +1,4 @@
-**GENXLS
+GENXLS
 
 This is a clone of the late Scott Klement's HSSF POI Service Program with a few extra features that have been added.  
 
