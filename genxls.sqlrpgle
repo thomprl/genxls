@@ -7,7 +7,16 @@ Ctl-Opt Thread(*SERIALIZE) BndDir('HSSF14');
 // Purpose: Run an SQL SELECT and write the result to an XLS, XLSX, CSV
 //          or HTML file in the IFS. POI 3.14 version of GENXLS.
 //
-// Information was gathered from the following sites
+// -----------------------------------------------------------------------
+// Revision History
+//
+// Turnover#  Date       Jira        Programmer
+// ---------- ---------- ----------- -----------------------------
+// FM40XXXX   MM/DD/YYYY FDSTR-XXXXX Ricky Thompson
+//   **INITIAL VERSION**
+// ~~ Insert mod marks above this line...
+// -----------------------------------------------------------------------
+
 // https://www.ibm.com/docs/en/i/7.4.0?topic=statements-get-descriptor
 // https://www.itjungle.com/2016/07/19/fhg071916-story01/
 // https://www.ibm.com/docs/en/i/7.4.0?topic=statements-get-descriptor#rbafzgetdescr__datatypecode
@@ -19,8 +28,8 @@ Dcl-Pr Main ExtPgm('GENXLS');
   pTitle CHAR(100) const;
   pSqlStatement CHAR(4096) const;
   pIfsPathAndFilename CHAR(1024) const;
-  pErrorCode CHAR(1) OPTIONS(*OMIT);
   pAutoFilter IND const OPTIONS(*NOPASS);
+  pErrorCode CHAR(1) OPTIONS(*NOPASS);
 End-Pr;
 
 Dcl-S vSqlStmt varchar(4096);
@@ -47,14 +56,14 @@ Dcl-Ds t_dsColumnList Template Qualified;
   dsColumnAttribute LIKEDS(t_dsColumnAttribute) DIM(300);
 End-Ds;
 
-Dcl-S gBook   like(SSWorkbook);
+Dcl-S gBook like(SSWorkbook);
 Dcl-S gSheet like(SSSheet);
-Dcl-S gLgHeading   like(SSCellStyle);
-Dcl-S gSmHeading   like(SSCellStyle);
-Dcl-S gColHeading   like(SSCellStyle);
-Dcl-S gNumeric   like(SSCellStyle);
-Dcl-S gText   like(SSCellStyle);
-Dcl-S gDates   like(SSCellStyle);
+Dcl-S gLgHeading like(SSCellStyle);
+Dcl-S gSmHeading like(SSCellStyle);
+Dcl-S gColHeading like(SSCellStyle);
+Dcl-S gNumeric like(SSCellStyle);
+Dcl-S gText like(SSCellStyle);
+Dcl-S gDates like(SSCellStyle);
 Dcl-S gNumericND like(SSCellStyle);
 Dcl-S gXLSX IND;
 Dcl-S gRowCount int(10) INZ(0);
@@ -112,8 +121,8 @@ Dcl-Proc Main;
     pTitle CHAR(100) const;
     pSqlStatement CHAR(4096) const;
     pIfsPathAndFilename CHAR(1024) const;
-    pErrorCode CHAR(1) OPTIONS(*OMIT);
     pAutoFilter IND const OPTIONS(*NOPASS);
+    pErrorCode CHAR(1) OPTIONS(*NOPASS);
   End-Pi;
 
   Dcl-Ds dsColumnList Qualified;
@@ -495,7 +504,12 @@ Dcl-Proc CheckSqlStatement;
 
 End-Proc;
 
-// Get Row Data and create Excel file
+///
+// GetRowData
+// Fetch query rows; export SQL NULLs as bordered blank cells or empty fields.
+// @param  pColumnList Column attributes and inclusion flags.
+// @return None. Errors are reported through SetError and SqlFailed.
+///
 Dcl-Proc GetRowData;
   Dcl-Pi *N;
     pColumnList LikeDS(t_dsColumnList) const;
@@ -504,6 +518,8 @@ Dcl-Proc GetRowData;
   Dcl-Ds dsColumnValues LIKEDS(t_dsColumnValues) DIM(300);
   Dcl-S vIndex INT(10);
   Dcl-S vColumnValue LIKE(dsColumnValues.columnValue);
+  Dcl-S vNullIndicator INT(5) INZ(0);
+  Dcl-S vBlankCell LIKE(SSCell) INZ;
   Dcl-S vFirstTime IND INZ(*On);
   Dcl-S vColumnCount INT(10);
   Dcl-S vWrkDecimalField PACKED(26:8);
@@ -580,6 +596,7 @@ Dcl-Proc GetRowData;
       EndIf;
 
       Reset vColumnValue;
+      Reset vNullIndicator;
       Reset vWrkDate;
       Reset vWrkTime;
       Reset vWrkTimestamp;
@@ -588,27 +605,46 @@ Dcl-Proc GetRowData;
         If pColumnList.dsColumnAttribute(vIndex).columnDateTimeIntervalCode = 1;
           Exec Sql
             GET DESCRIPTOR :vForDescriptor
-              value :vIndex :vWrkDate = DATA;
-          vColumnValue = %char(vWrkDate);
+              VALUE :vIndex
+                :vNullIndicator = INDICATOR,
+                :vWrkDate = DATA;
         ElseIf pColumnList.dsColumnAttribute(vIndex).columnDateTimeIntervalCode = 2;
           Exec Sql
             GET DESCRIPTOR :vForDescriptor
-              value :vIndex :vWrkTime = DATA;
-          vColumnValue = %char(vWrkTime);
+              VALUE :vIndex
+                :vNullIndicator = INDICATOR,
+                :vWrkTime = DATA;
         ElseIf pColumnList.dsColumnAttribute(vIndex).columnDateTimeIntervalCode = 3;
           Exec Sql
             GET DESCRIPTOR :vForDescriptor
-              value :vIndex :vWrkTimestamp = DATA;
-          vColumnValue = %char(vWrkTimestamp);
+              VALUE :vIndex
+                :vNullIndicator = INDICATOR,
+                :vWrkTimestamp = DATA;
         EndIf;
       Else;
         Exec Sql
           GET DESCRIPTOR :vForDescriptor
-            value :vIndex :vColumnValue = DATA;
+            VALUE :vIndex
+              :vNullIndicator = INDICATOR,
+              :vColumnValue = DATA;
       EndIf;
       // Each branch above runs one GET DESCRIPTOR
       If SqlFailed('GET DESCRIPTOR DATA column ' + %char(vIndex));
         Leave;
+      EndIf;
+
+      // DATA is undefined for NULL; do not convert it or reuse a prior value.
+      If vNullIndicator < 0;
+        Clear vColumnValue;
+      ElseIf pColumnList.dsColumnAttribute(vIndex).columnType = 'DATE';
+        Select;
+          When pColumnList.dsColumnAttribute(vIndex).columnDateTimeIntervalCode = 1;
+            vColumnValue = %char(vWrkDate);
+          When pColumnList.dsColumnAttribute(vIndex).columnDateTimeIntervalCode = 2;
+            vColumnValue = %char(vWrkTime);
+          When pColumnList.dsColumnAttribute(vIndex).columnDateTimeIntervalCode = 3;
+            vColumnValue = %char(vWrkTimestamp);
+        EndSl;
       EndIf;
 
       dsColumnValues(vIndex).columnValue = vColumnValue;
@@ -620,7 +656,14 @@ Dcl-Proc GetRowData;
         vDetailString += '<tr>';
       EndIf;
 
-      If pColumnList.dsColumnAttribute(vIndex).columnType = 'CHAR';
+      If vNullIndicator < 0;
+        If gIfsFileType In %list('XLS' : 'XLSX');
+          vBlankCell = SSRow_createCell(gRow : vColumnCount);
+          SSCell_setCellStyle(vBlankCell : gText);
+        ElseIf gIfsFileType = 'HTML';
+          vDetailString += '<td></td>';
+        EndIf;
+      ElseIf pColumnList.dsColumnAttribute(vIndex).columnType = 'CHAR';
         If gIfsFileType In %list('XLS' : 'XLSX');
           ss_text( gRow: vColumnCount : %trim(vColumnValue)   : gText);
         ElseIf gIfsFileType = 'CSV';
@@ -763,7 +806,7 @@ Dcl-Proc GetRowData;
     ss_end_object_group();
   EndIf;
 
-End-Proc;
+End-Proc GetRowData;
 
 // Implement logic to create Excel file and write column headers based on dsColumnList
 Dcl-Proc CreateSpreadsheet;
@@ -1202,3 +1245,4 @@ Dcl-Proc SetJavaPath;
   EndMon;
 
 End-Proc;
+
