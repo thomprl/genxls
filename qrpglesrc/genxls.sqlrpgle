@@ -8,14 +8,6 @@ Ctl-Opt Thread(*SERIALIZE) BndDir('HSSF14');
 //          or HTML file in the IFS. POI 3.14 version of GENXLS.
 //
 // -----------------------------------------------------------------------
-// Revision History
-//
-// Turnover#  Date       Jira        Programmer
-// ---------- ---------- ----------- -----------------------------
-// FM40XXXX   MM/DD/YYYY FDSTR-XXXXX Ricky Thompson
-//   **INITIAL VERSION**
-// ~~ Insert mod marks above this line...
-// -----------------------------------------------------------------------
 
 // https://www.ibm.com/docs/en/i/7.4.0?topic=statements-get-descriptor
 // https://www.itjungle.com/2016/07/19/fhg071916-story01/
