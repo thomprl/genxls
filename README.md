@@ -27,5 +27,5 @@ CRTCMD CMD(GENXLS) PGM(GENXLS) TEXT('Generate XLSX from SQL - POI 3.14')
 
 Usage:
 ```
- GENXLS TITLE(QCUSTCDT) SQLSTMT('select * from qiws.QCUSTCDT') IFSPTHFILE('/tmp/QCUSTCDT.xlsx')                                                           
+ GENXLS TITLE(QCUSTCDT) SQLSTMT('select * from qiws.QCUSTCDT') IFSPTHFILE('/tmp/QCUSTCDT.xlsx')
 ```
